@@ -1,0 +1,10 @@
+INSTRUCCIONES DE USO — v2
+==========================
+
+1. Haz doble clic en "convertidor.exe"
+2. Escoge la versión de tu AutoCAD en el menú
+3. Selecciona modo: Unitario (progreso individual) o Lote (más rápido)
+4. Arrastra archivos .dwg/.dxf a la ventana O haz clic en "Buscar y Convertir Planos"
+5. Puedes seleccionar uno o varios archivos a la vez
+6. Espera a que termine la conversión
+7. No es necesario tener AutoCAD ni nada instalado
