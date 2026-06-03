@@ -127,6 +127,8 @@ Recrear `convertidor.py` desde cero con UX mejorada usando metodología Superpow
 - `dist\convertidor.exe` — Ejecutable con ODA dentro (78.5 MB)
 - `installer\Setup_Convertidor_CAD_v2.exe` — Instalador profesional (59.4 MB)
 - `instalador.iss` — Script Inno Setup
+- `icono.ico` — Icono personalizado (CCAD)
+- `generar_icono.py` — Script para recrear icono
 - `ODA/` — ODA File Converter v27.1
 - `docs/superpowers/specs/2026-06-02-convertidor-v2-design.md` — Design spec
 - `docs/superpowers/plans/2026-06-02-convertidor-v2-plan.md` — Implementation plan
