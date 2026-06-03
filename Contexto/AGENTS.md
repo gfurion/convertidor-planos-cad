@@ -143,7 +143,11 @@ Recrear `convertidor.py` desde cero con UX mejorada usando metodología Superpow
 ### Pendiente
 - Probar conversión con archivos reales
 - Probar instalador en máquina limpia
-- Git init y commits pendientes
+
+### GitHub
+- Repositorio privado creado: `https://github.com/gfurion/convertidor-planos-cad`
+- Commits: `d651cb8`, `4d80d32`
+- Rama: `master`
 
 ---
 
