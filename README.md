@@ -17,12 +17,11 @@ Convierte archivos DXF/DWG a versiones específicas de AutoCAD. Desarrollado con
 git clone https://github.com/gfurion/convertidor-planos-cad.git
 cd convertidor-planos-cad
 
-# 2. Instalar dependencias Python
-pip install ttkbootstrap tkinterdnd2 pyinstaller pillow
+# 2. Configurar motor ODA (descarga automática ~70 MB)
+.\setup.ps1
 
-# 3. Copiar el motor ODA (no está en el repo por ser ~70 MB)
-#    Desde la máquina original, copiar la carpeta ODA\ completa aquí
-#    O descargar ODA File Converter v27.1 desde developer.opendesign.com
+# 3. Instalar dependencias Python
+pip install ttkbootstrap tkinterdnd2 pyinstaller pillow
 ```
 
 ## Ejecutar la app

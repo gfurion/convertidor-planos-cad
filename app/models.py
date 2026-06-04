@@ -1,0 +1,15 @@
+VERSION_MAP = {
+    "AutoCAD 2018–2024": "ACAD2018",
+    "AutoCAD 2013–2017": "ACAD2013",
+    "AutoCAD 2010–2012": "ACAD2010",
+    "AutoCAD 2007–2009": "ACAD2007",
+    "AutoCAD 2004–2006": "ACAD2004",
+    "AutoCAD 2000–2003": "ACAD2000",
+    "AutoCAD R12–R14":   "ACAD12",
+}
+
+VALID_EXTENSIONS = (".dwg", ".dxf")
+
+APP_TITLE = "Convertidor de Planos CAD v2"
+DEFAULT_VERSION = "AutoCAD 2018–2024"
+DEFAULT_THEME = "superhero"

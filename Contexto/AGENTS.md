@@ -4,11 +4,28 @@
 Windows desktop app that converts AutoCAD DXF/DWG files to a user-selected target DWG version. Single-file Python app packaged with PyInstaller. UI in Spanish for non-technical users.
 
 ## Architecture
-- **`convertidor.py`** — single source file with GUI + conversion logic
-- **`ODA/`** — ODA File Converter v27.1 (Qt6, VC16) bundled for DWG read/write
+- **`app/models.py`** — data models (VERSION_MAP, constants)
+- **`app/engine.py`** — ODA conversion logic (ODAEngine class)
+- **`app/utils.py`** — helpers (parse_drop_data, setup_logging)
+- **`app/gui.py`** — GUI classes (ConvertAppBase, ConvertApp) + run()
+- **`app/__init__.py`** — package marker
+- **`run.py`** — entry point (`python run.py` or `python -m app`)
+- **`ODA/`** — ODA File Converter v27.1 (Qt6, VC16) bundled for DWG read/write (~70 MB, excluded via .gitignore)
+- **`tests/`** — unit tests (pytest, 19 tests)
 - **`convertidor.exe`** — PyInstaller `--onefile --windowed` build
 - **`INSTRUCCIONES.txt`** — usage instructions for end users
 - **`AGENTS.md`** — this file
+
+### Tools de calidad
+- **ruff** — linter configurado en `pyproject.toml`
+- **mypy** — type checker (no-strict, con `ignore_missing_imports`)
+- **pytest** — test runner
+- **GitHub Actions** — CI en `.github/workflows/test.yml` (ruff + pytest en push/PR)
+
+## Setup del proyecto
+- Ejecutar `.\setup.ps1` después de clonar para descargar ODA File Converter
+- El script intenta winget primero, luego descarga MSI directo, o copia desde instalación existente con `-FromInstalled`
+- ODA/ está en .gitignore (~70 MB) — se descarga por separado
 
 ## Key Technical Decisions
 - **ODA File Converter** handles ALL file reads/writes (both DXF and DWG)
@@ -39,9 +56,13 @@ ODAFileConverter <InputFolder> <OutputFolder> <OutputVersion> <OutputFormat> <Re
 
 ## Building the .exe
 ```powershell
-pip install ttkbootstrap
-pip install pyinstaller
-pyinstaller --onefile --windowed --hidden-import=ttkbootstrap --add-data "ODA;ODA" convertidor.py
+pip install ttkbootstrap pyinstaller
+pyinstaller --onefile --windowed ^
+  --hidden-import=ttkbootstrap ^
+  --hidden-import=tkinterdnd2 ^
+  --add-data "ODA;ODA" ^
+  --add-data "app;app" ^
+  run.py
 ```
 
 ## Qt Platform Plugin Fix
@@ -94,7 +115,7 @@ Aplicar repositorio `nathankim0/clean-architecture-skills` al proyecto:
 ### Recursos
 - Repo skills: https://github.com/nathankim0/clean-architecture-skills
 - Docs OpenCode: https://opencode.ai/config.json
-- ODA File Converter v27.1 en `%TEMP%\ODAExtract\`
+- ODA File Converter v27.1: descargar con `.\setup.ps1` o desde https://www.opendesign.com/guestfiles/oda_file_converter
 
 ---
 
@@ -153,13 +174,62 @@ Recrear `convertidor.py` desde cero con UX mejorada usando metodología Superpow
 
 ---
 
+## Session Log — 04-Jun-2026 (Sesión 3)
+
+### Objetivo
+Ejecutar Fase 1: Refactorizar monolito en módulos, agregar tests y CI/CD.
+
+### Progreso
+- [x] Clonar repo desde GitHub a PC nueva (`C:\Users\giova\Desktop\Convertidor de Planos CAD\`)
+- [x] Instalar ODA File Converter v27.1 via winget y copiar a `ODA/` (69.3 MB)
+- [x] Corregir `setup.ps1` para detectar subcarpetas versionadas (`ODAFileConverter 27.1.0`)
+- [x] Crear estructura `app/` con 4 módulos: models, engine, utils, gui
+- [x] Crear `run.py` como entry point
+- [x] Crear `pyproject.toml` (ruff + mypy) + `requirements-dev.txt`
+- [x] Crear 19 tests unitarios (pytest) — todos pasando
+- [x] Ruff: 0 errores. Mypy: 0 errores.
+- [x] Verificar que la app se abre y destruye correctamente
+- [x] Crear `CHANGELOG.md`
+- [x] Crear CI/CD (`./github/workflows/test.yml`)
+- [x] Actualizar `AGENTS.md`
+
+### Archivos creados
+- `app/__init__.py`, `app/models.py`, `app/engine.py`, `app/utils.py`, `app/gui.py`
+- `run.py`
+- `tests/__init__.py`, `tests/test_models.py`, `tests/test_engine.py`, `tests/test_utils.py`
+- `pyproject.toml`, `requirements-dev.txt`
+- `CHANGELOG.md`
+- `.github/workflows/test.yml`
+- `ODA/` (69.3 MB, .gitignored)
+
+### Archivos modificados
+- `setup.ps1` — detecta subcarpetas versionadas de ODA
+- `Contexto/AGENTS.md` — sesión log, arquitectura actualizada, plan de mejora marcado
+- `README.md` — setup simplificado
+- `.gitignore` — verificado (ODA/ excluido)
+
+### Notas técnicas
+- module `app/` funciona con `python run.py` o `python -m app`
+- tkinterdnd2 con `TkinterDnD.Tk` en `app/gui.py` — import condicional (HAS_DND)
+- `ruff` con per-file-ignores para F405 en gui.py (star import de ttkbootstrap.constants)
+- PyInstaller build actualizado: `--add-data "app;app" --hidden-import=tkinterdnd2`
+- Mypy `ignore_missing_imports = true` para ttkbootstrap/tkinterdnd2
+
+### Pendiente
+- Compilar .exe con PyInstaller
+- Probar conversión con archivos reales
+- Pasar a Fase 2: UX v2
+
+---
+
 # PLAN DE MEJORA — Próximas Versiones
 
-## 1. Arquitectura y Código
-- Refactorizar monolito `convertidor.py` en módulos: `gui/`, `engine/`, `models/`, `utils/`
-- Agregar tests unitarios + CI/CD (GitHub Actions)
-- Control de versiones semántico
-- Detección/actualización automática del engine ODA
+## 1. Arquitectura y Código ✅ COMPLETADO
+- [x] Refactorizar monolito `convertidor.py` en módulos: `app/models.py`, `app/engine.py`, `app/utils.py`, `app/gui.py`
+- [x] Tests unitarios (19 tests con pytest) + CI/CD (GitHub Actions)
+- [x] Linting con ruff + type checking con mypy
+- [x] Control de versiones semántico (CHANGELOG.md, pyproject.toml v2.1.0)
+- [ ] Detección/actualización automática del engine ODA — pendiente
 
 ## 2. UX/UI
 - Vista previa de planos (miniaturas DWG/DXF)
