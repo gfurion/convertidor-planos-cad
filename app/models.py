@@ -1,3 +1,6 @@
+from dataclasses import asdict, dataclass
+from datetime import datetime
+
 VERSION_MAP = {
     "AutoCAD 2018–2024": "ACAD2018",
     "AutoCAD 2013–2017": "ACAD2013",
@@ -10,6 +13,32 @@ VERSION_MAP = {
 
 VALID_EXTENSIONS = (".dwg", ".dxf")
 
+OUTPUT_FORMATS = ["DWG", "DXF"]
+FORMAT_EXT_MAP = {"DWG": ".dwg", "DXF": ".dxf"}
+DEFAULT_FORMAT = "DWG"
+
 APP_TITLE = "Convertidor de Planos CAD v2"
 DEFAULT_VERSION = "AutoCAD 2018–2024"
 DEFAULT_THEME = "superhero"
+
+
+@dataclass
+class HistoryEntry:
+    timestamp: str
+    source_file: str
+    target_version: str
+    status: str
+    output_path: str
+
+    @classmethod
+    def now(cls, source_file: str, target_version: str, status: str, output_path: str):
+        return cls(
+            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            source_file=source_file,
+            target_version=target_version,
+            status=status,
+            output_path=output_path,
+        )
+
+    def to_dict(self) -> dict:
+        return asdict(self)

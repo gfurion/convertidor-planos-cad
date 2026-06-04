@@ -2,11 +2,11 @@ import logging
 import os
 import threading
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import Text, Toplevel, filedialog, messagebox
 
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *  # noqa: F403
-from ttkbootstrap.widgets import ToolTip
+from ttkbootstrap.widgets import ToastNotification, ToolTip
 
 try:
     from tkinterdnd2 import DND_FILES, TkinterDnD
@@ -15,8 +15,18 @@ except ImportError:
     HAS_DND = False
 
 from app.engine import ODAEngine
-from app.models import APP_TITLE, DEFAULT_THEME, DEFAULT_VERSION, VALID_EXTENSIONS, VERSION_MAP
-from app.utils import parse_drop_data
+from app.models import (
+    APP_TITLE,
+    DEFAULT_FORMAT,
+    DEFAULT_THEME,
+    DEFAULT_VERSION,
+    FORMAT_EXT_MAP,
+    OUTPUT_FORMATS,
+    VALID_EXTENSIONS,
+    VERSION_MAP,
+    HistoryEntry,
+)
+from app.utils import add_history, clear_history, load_history, parse_drop_data, scan_folder
 
 
 class ConvertAppBase:
@@ -25,6 +35,7 @@ class ConvertAppBase:
         self.output_dir = ""
         self.engine = None
         self._results = {"success": 0, "failed": 0, "error": None}
+        self._history_entries: list = []
         self._cancel_event = threading.Event()
         self._setup_oda()
         self._setup_ui()
@@ -75,6 +86,16 @@ class ConvertAppBase:
         batch_radio.pack(side=LEFT, padx=10)
         ToolTip(batch_radio,
                 text="Convierte todos de una vez — más rápido, sin progreso individual")
+
+        self.format_var = ttk.StringVar(value=DEFAULT_FORMAT)
+        format_frame = ttk.Frame(main)
+        format_frame.pack(anchor=W, pady=(0, 10))
+        ttk.Label(format_frame, text="Formato de salida:",
+                  font=("-size 10 -weight bold")).pack(side=LEFT)
+        format_combo = ttk.Combobox(format_frame, textvariable=self.format_var,
+                                     values=OUTPUT_FORMATS, state="readonly", width=8)
+        format_combo.pack(side=LEFT, padx=(5, 0))
+        ToolTip(format_combo, text="Selecciona el formato de salida: DWG o DXF")
 
         ttk.Separator(main).pack(fill=X, pady=5)
 
@@ -127,14 +148,41 @@ class ConvertAppBase:
         ToolTip(self.convert_btn,
                 text="Selecciona archivos .dwg/.dxf o convierte los archivos arrastrados")
 
+        btn_row = ttk.Frame(main)
+        btn_row.pack(fill=X, pady=5)
+
         self.cancel_btn = ttk.Button(
-            main, text="Cancelar",
+            btn_row, text="Cancelar",
             bootstyle="danger",
             command=self._on_cancel
         )
-        self.cancel_btn.pack(fill=X, pady=5)
+        self.cancel_btn.pack(side=LEFT, fill=X, expand=True)
         self.cancel_btn.pack_forget()
-        ToolTip(self.cancel_btn, text="Detiene la conversión en curso")
+
+        self.folder_btn = ttk.Button(
+            btn_row, text="Carpeta",
+            bootstyle="secondary-outline",
+            command=self._on_select_folder
+        )
+        self.folder_btn.pack(side=RIGHT, padx=(5, 0))
+        ToolTip(self.folder_btn,
+                text="Seleccionar carpeta con planos DXF/DWG (busca recursivamente)")
+
+        self.theme_btn = ttk.Button(
+            btn_row, text="☀",
+            bootstyle="secondary-outline", width=3,
+            command=self._toggle_theme
+        )
+        self.theme_btn.pack(side=RIGHT, padx=(5, 0))
+        ToolTip(self.theme_btn, text="Alternar modo oscuro/claro")
+
+        self.hist_btn = ttk.Button(
+            btn_row, text="Historial",
+            bootstyle="secondary-outline",
+            command=self._open_history
+        )
+        self.hist_btn.pack(side=RIGHT, padx=(5, 0))
+        ToolTip(self.hist_btn, text="Ver historial de conversiones")
 
         ttk.Separator(main).pack(fill=X, pady=5)
 
@@ -147,12 +195,73 @@ class ConvertAppBase:
         ttk.Label(main, textvariable=self.status_var,
                   font=("-size 9")).pack(anchor=W)
 
+        log_toggle_frame = ttk.Frame(main)
+        log_toggle_frame.pack(fill=X, pady=(5, 0))
+        self._log_visible = False
+        self.log_toggle_btn = ttk.Button(
+            log_toggle_frame, text="Log ►",
+            bootstyle="secondary-link", padding=(0, 0),
+            command=self._toggle_log
+        )
+        self.log_toggle_btn.pack(side=LEFT)
+        ttk.Button(log_toggle_frame, text="Copiar log", bootstyle="secondary-link",
+                   padding=(0, 0), command=self._copy_log).pack(side=RIGHT)
+
+        self.log_frame = ttk.Frame(main)
+        self.log_text = Text(self.log_frame, height=6, font=("Consolas", 8),
+                                wrap="word", state="normal")
+        log_scroll = ttk.Scrollbar(self.log_frame, orient="vertical",
+                                   command=self.log_text.yview)
+        self.log_text.configure(yscrollcommand=log_scroll.set)
+        self.log_text.pack(side=LEFT, fill=BOTH, expand=True)
+        log_scroll.pack(side=RIGHT, fill=Y)
+
+    def _toggle_log(self):
+        self._log_visible = not self._log_visible
+        if self._log_visible:
+            self.log_frame.pack(fill=BOTH, expand=False, pady=(2, 0))
+            self.log_toggle_btn.configure(text="Log ▼")
+        else:
+            self.log_frame.pack_forget()
+            self.log_toggle_btn.configure(text="Log ►")
+
+    def _copy_log(self):
+        content = self.log_text.get("1.0", "end-1c")
+        if content:
+            self.clipboard_clear()
+            self.clipboard_append(content)
+
+    def _on_select_folder(self):
+        folder = filedialog.askdirectory(title="Seleccionar carpeta con planos CAD")
+        if not folder:
+            return
+        found = scan_folder(folder)
+        if not found:
+            messagebox.showinfo("Sin planos",
+                                f"No se encontraron archivos .dwg o .dxf en:\n{folder}")
+            return
+        added = 0
+        for f in found:
+            if f not in self.files:
+                self.files.append(f)
+                added += 1
+        if added:
+            self._refresh_file_list()
+            logging.info("Carpeta escaneada: %d archivos agregados desde %s", added, folder)
+
     def _on_drop(self, event):
         raw = event.data
         paths = parse_drop_data(raw)
         added = 0
         invalid = []
         for p in paths:
+            if os.path.isdir(p):
+                found = scan_folder(p)
+                for f in found:
+                    if f not in self.files:
+                        self.files.append(f)
+                        added += 1
+                continue
             ext = os.path.splitext(p)[1].lower()
             if ext in VALID_EXTENSIONS:
                 if p not in self.files:
@@ -218,6 +327,7 @@ class ConvertAppBase:
 
         self._files_snapshot = list(self.files)
         version_code = VERSION_MAP.get(self.version_var.get())
+        output_format = self.format_var.get()
         output = self.output_dir or os.path.dirname(self._files_snapshot[0])
 
         try:
@@ -255,9 +365,9 @@ class ConvertAppBase:
         def worker():
             try:
                 if mode == "unit":
-                    self._convert_unitario(version_code, output)
+                    self._convert_unitario(version_code, output, output_format)
                 else:
-                    self._convert_batch(version_code, output)
+                    self._convert_batch(version_code, output, output_format)
             except PermissionError:
                 self._results["error"] = (
                     "Error de permisos",
@@ -279,8 +389,20 @@ class ConvertAppBase:
         self.status_var.set("Cancelando...")
         self.cancel_btn.configure(state=DISABLED)
 
-    def _convert_unitario(self, version, output):
+    def _resolve_output_path(self, source_file: str, base_output: str,
+                              output_format: str = "DWG") -> str:
+        ext = FORMAT_EXT_MAP.get(output_format, ".dwg")
+        input_base = os.path.commonpath(self._files_snapshot) if len(self._files_snapshot) > 1 \
+            else os.path.dirname(self._files_snapshot[0])
+        rel = os.path.relpath(os.path.dirname(source_file), input_base)
+        out_dir = os.path.join(base_output, rel) if rel != "." else base_output
+        os.makedirs(out_dir, exist_ok=True)
+        return os.path.join(out_dir, os.path.splitext(os.path.basename(source_file))[0] + ext)
+
+    def _convert_unitario(self, version, output, output_format="DWG"):
         total = len(self._files_snapshot)
+        import time as time_mod
+        start_time = time_mod.time()
         for i, f in enumerate(self._files_snapshot, 1):
             if self._cancel_event.is_set():
                 self._results["error"] = (
@@ -288,25 +410,38 @@ class ConvertAppBase:
                     "La conversión fue cancelada por el usuario."
                 )
                 return
-            self.after(0, self._update_progress, i, total, os.path.basename(f))
-            self.after(0, self._update_file_status, f, "Convirtiendo...")
-            ok = self.engine.convert_single(f, version, output)
+            t0 = time_mod.time()
+            ok = self.engine.convert_single(f, version, output, output_format)
+            elapsed = time_mod.time() - t0
+            out_path = self._resolve_output_path(f, output, output_format)
             if ok:
                 self._results["success"] += 1
             else:
                 self._results["failed"] += 1
             status = "OK" if ok else "Error"
+            self._history_entries.append((f, status, out_path if ok else ""))
+            remaining = total - i
+            if i > 1 and elapsed > 0 and total > 1:
+                avg = (time_mod.time() - start_time) / i
+                eta = int(avg * remaining)
+                self.after(0, self._update_progress, i, total,
+                           f"{os.path.basename(f)} — ETA: {eta}s")
+            else:
+                self.after(0, self._update_progress, i, total, os.path.basename(f))
             self.after(0, self._update_file_status, f, status)
-            logging.info("%s → %s", os.path.basename(f), status)
+            logging.info("%s → %s (%.1fs)", os.path.basename(f), status, elapsed)
 
-    def _convert_batch(self, version, output):
+    def _convert_batch(self, version, output, output_format="DWG"):
         self.after(0, self._update_progress, 0, len(self._files_snapshot), "Procesando lote...")
-        results = self.engine.convert_batch(self._files_snapshot, version, output)
+        results = self.engine.convert_batch(self._files_snapshot, version, output, output_format)
         self._results["success"] = len(results["success"])
         self._results["failed"] = len(results["failed"])
         for f in results["success"]:
+            out_path = self._resolve_output_path(f, output, output_format)
+            self._history_entries.append((f, "OK", out_path))
             self.after(0, self._update_file_status, f, "OK")
         for f in results["failed"]:
+            self._history_entries.append((f, "Error", ""))
             self.after(0, self._update_file_status, f, "Error")
 
     def _update_progress(self, current, total, name):
@@ -322,11 +457,23 @@ class ConvertAppBase:
                 self.file_list.item(item, values=(vals[0], status))
                 break
 
+    def _save_history(self):
+        for f, status, out in self._history_entries:
+            entry = HistoryEntry.now(
+                source_file=f,
+                target_version=self.version_var.get(),
+                status=status,
+                output_path=out,
+            )
+            add_history(entry)
+        self._history_entries.clear()
+
     def _conversion_done(self):
         error = self._results.get("error")
         total = len(self._files_snapshot)
         success = self._results.get("success", 0)
         failed = self._results.get("failed", 0)
+        self._save_history()
         self.progress_var.set(100)
         self.status_var.set(f"Conversión completa — {success} OK, {failed} errores")
         self.convert_btn.configure(state=NORMAL)
@@ -335,6 +482,7 @@ class ConvertAppBase:
             self.drop_area.configure(
                 text="Arrastra aquí tus planos .dwg/.dxf\no haz clic en 'Buscar y Convertir Planos'"
             )
+        self._show_toast(success, failed, error)
         if error:
             messagebox.showerror(error[0], error[1])
         elif failed > 0 and success > 0:
@@ -352,6 +500,88 @@ class ConvertAppBase:
                 "Completado",
                 f"Se convirtieron {total} archivo{'s' if total != 1 else ''} exitosamente."
             )
+
+    def _toggle_theme(self):
+        style = ttk.Style()
+        current = style.theme_use()
+        new = "flatly" if current == "superhero" else "superhero"
+        style.theme_use(new)
+        self.theme_btn.configure(text="☾" if new == "superhero" else "☀")
+
+    def _show_toast(self, success, failed, error):
+        if error:
+            msg = error[1] if len(error) > 1 else error[0]
+            title = error[0]
+            bootstyle = "danger"
+        elif failed > 0 and success > 0:
+            msg = f"{success} convertidos, {failed} errores"
+            title = "Completado con errores"
+            bootstyle = "warning"
+        elif failed > 0:
+            msg = f"Todos los {failed} archivo(s) fallaron"
+            title = "Error"
+            bootstyle = "danger"
+        else:
+            msg = f"{success} archivo(s) convertidos exitosamente"
+            title = "Conversión completa"
+            bootstyle = "success"
+        toast = ToastNotification(
+            title=title,
+            message=msg,
+            bootstyle=bootstyle,
+            duration=5000,
+        )
+        toast.show_toast()
+
+    def _open_history(self):
+        entries = load_history()
+        win = Toplevel(self)
+        win.title("Historial de conversiones")
+        win.geometry("750x400")
+        win.transient(self)
+        win.grab_set()
+
+        tree = ttk.Treeview(win, columns=("date", "file", "version", "status", "output"),
+                            show="headings", height=15)
+        tree.heading("date", text="Fecha")
+        tree.heading("file", text="Archivo")
+        tree.heading("version", text="Versión")
+        tree.heading("status", text="Estado")
+        tree.heading("output", text="Destino")
+        tree.column("date", width=140)
+        tree.column("file", width=220)
+        tree.column("version", width=120)
+        tree.column("status", width=70)
+        tree.column("output", width=180)
+        tree.pack(fill=BOTH, expand=True, padx=5, pady=5)
+
+        for e in reversed(entries):
+            tree.insert("", END, values=(
+                e.timestamp, os.path.basename(e.source_file),
+                e.target_version, e.status, e.output_path,
+            ))
+
+        def on_double_click(event):
+            sel = tree.selection()
+            if not sel:
+                return
+
+        tree.bind("<Double-1>", on_double_click)
+
+        btn_frame = ttk.Frame(win)
+        btn_frame.pack(fill=X, padx=5, pady=(0, 5))
+
+        ttk.Button(btn_frame, text="Limpiar historial", bootstyle="danger-outline",
+                   command=lambda: self._clear_history(tree)).pack(side=RIGHT)
+        ttk.Button(btn_frame, text="Cerrar", bootstyle="secondary",
+                   command=win.destroy).pack(side=RIGHT, padx=(0, 5))
+
+    def _clear_history(self, tree):
+        if messagebox.askyesno("Limpiar historial",
+                                "¿Eliminar todo el historial de conversiones?"):
+            clear_history()
+            for item in tree.get_children():
+                tree.delete(item)
 
 
 if HAS_DND:
@@ -371,7 +601,14 @@ else:
 
 
 def run():
-    from app.utils import setup_logging
+    from app.utils import GUILogHandler, setup_logging
     setup_logging()
     app = ConvertApp()
+    gui_handler = GUILogHandler()
+    gui_handler.setFormatter(logging.Formatter(
+        "[%(asctime)s] %(message)s",
+        datefmt="%H:%M:%S",
+    ))
+    gui_handler.set_widget(app.log_text)
+    logging.getLogger().addHandler(gui_handler)
     app.mainloop()

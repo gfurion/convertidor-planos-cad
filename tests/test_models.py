@@ -1,4 +1,13 @@
-from app.models import VERSION_MAP, VALID_EXTENSIONS, APP_TITLE, DEFAULT_VERSION, DEFAULT_THEME
+from app.models import (
+    APP_TITLE,
+    DEFAULT_FORMAT,
+    DEFAULT_THEME,
+    DEFAULT_VERSION,
+    FORMAT_EXT_MAP,
+    OUTPUT_FORMATS,
+    VALID_EXTENSIONS,
+    VERSION_MAP,
+)
 
 
 class TestVersionMap:
@@ -33,3 +42,12 @@ class TestAppConstants:
 
     def test_default_theme(self):
         assert DEFAULT_THEME == "superhero"
+
+    def test_output_formats(self):
+        assert OUTPUT_FORMATS == ["DWG", "DXF"]
+
+    def test_format_ext_map(self):
+        assert FORMAT_EXT_MAP == {"DWG": ".dwg", "DXF": ".dxf"}
+
+    def test_default_format(self):
+        assert DEFAULT_FORMAT == "DWG"

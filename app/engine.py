@@ -20,13 +20,14 @@ class ODAEngine:
         env["QT_PLUGIN_PATH"] = str(self.oda_dir)
         return env
 
-    def _run_oda(self, input_dir: str, output_dir: str, version: str) -> bool:
+    def _run_oda(self, input_dir: str, output_dir: str, version: str,
+                  output_format: str = "DWG") -> bool:
         cmd = [
             str(self.oda_exe),
             input_dir,
             output_dir,
             version,
-            "DWG",
+            output_format,
             "0",
             "1",
         ]
@@ -53,7 +54,9 @@ class ODAEngine:
             logging.error("Error ejecutando ODA: %s", e)
             return False
 
-    def convert_batch(self, files: list, version: str, output_dir: str) -> dict:
+    def convert_batch(self, files: list, version: str, output_dir: str,
+                       output_format: str = "DWG") -> dict:
+        out_ext = ".dwg" if output_format == "DWG" else ".dxf"
         results: dict = {"success": [], "failed": []}
         with tempfile.TemporaryDirectory() as tmp_input:
             tmp_output = tempfile.mkdtemp()
@@ -61,42 +64,36 @@ class ODAEngine:
                 for f in files:
                     shutil.copyfile(f, os.path.join(tmp_input, os.path.basename(f)))
 
-                self._run_oda(tmp_input, tmp_output, version)
+                self._run_oda(tmp_input, tmp_output, version, output_format)
 
                 for f in files:
                     base_name = os.path.splitext(os.path.basename(f))[0]
-                    input_ext = os.path.splitext(f)[1].lower()
-                    expected = [input_ext, ".dwg", ".dxf"]
-                    found = False
-                    for ext in expected:
-                        candidate = os.path.join(tmp_output, base_name + ext)
-                        if os.path.exists(candidate):
-                            dst = os.path.join(output_dir, base_name + ext)
-                            shutil.copyfile(candidate, dst)
-                            results["success"].append(f)
-                            found = True
-                            break
-                    if not found:
+                    candidate = os.path.join(tmp_output, base_name + out_ext)
+                    if os.path.exists(candidate):
+                        dst = os.path.join(output_dir, base_name + out_ext)
+                        shutil.copyfile(candidate, dst)
+                        results["success"].append(f)
+                    else:
                         results["failed"].append(f)
             finally:
                 shutil.rmtree(tmp_output, ignore_errors=True)
         return results
 
-    def convert_single(self, file: str, version: str, output_dir: str) -> bool:
+    def convert_single(self, file: str, version: str, output_dir: str,
+                        output_format: str = "DWG") -> bool:
+        out_ext = ".dwg" if output_format == "DWG" else ".dxf"
         with tempfile.TemporaryDirectory() as tmp_input:
             tmp_output = tempfile.mkdtemp()
             try:
                 shutil.copyfile(file, os.path.join(tmp_input, os.path.basename(file)))
-                ok = self._run_oda(tmp_input, tmp_output, version)
+                ok = self._run_oda(tmp_input, tmp_output, version, output_format)
                 if ok:
                     base_name = os.path.splitext(os.path.basename(file))[0]
-                    input_ext = os.path.splitext(file)[1].lower()
-                    for ext in [input_ext, ".dwg", ".dxf"]:
-                        src = os.path.join(tmp_output, base_name + ext)
-                        if os.path.exists(src):
-                            dst = os.path.join(output_dir, base_name + ext)
-                            shutil.copyfile(src, dst)
-                            return True
+                    src = os.path.join(tmp_output, base_name + out_ext)
+                    if os.path.exists(src):
+                        dst = os.path.join(output_dir, base_name + out_ext)
+                        shutil.copyfile(src, dst)
+                        return True
                 return False
             finally:
                 shutil.rmtree(tmp_output, ignore_errors=True)

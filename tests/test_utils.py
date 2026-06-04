@@ -1,6 +1,3 @@
-import os
-import tempfile
-from pathlib import Path
 
 from app.utils import parse_drop_data
 

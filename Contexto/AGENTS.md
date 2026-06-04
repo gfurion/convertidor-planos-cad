@@ -1,20 +1,20 @@
 # AGENTS.md
 
 ## Project Overview
-Windows desktop app that converts AutoCAD DXF/DWG files to a user-selected target DWG version. Single-file Python app packaged with PyInstaller. UI in Spanish for non-technical users.
+Windows desktop app that converts AutoCAD DXF/DWG files between versions and formats (DWG ↔ DXF). Single-file Python app packaged with PyInstaller. UI in Spanish for non-technical users.
 
 ## Architecture
-- **`app/models.py`** — data models (VERSION_MAP, constants)
+- **`app/models.py`** — data models (VERSION_MAP, OUTPUT_FORMATS, HistoryEntry)
 - **`app/engine.py`** — ODA conversion logic (ODAEngine class)
-- **`app/utils.py`** — helpers (parse_drop_data, setup_logging)
+- **`app/utils.py`** — helpers (parse_drop_data, setup_logging, HistoryManager, GUILogHandler, PresetManager)
 - **`app/gui.py`** — GUI classes (ConvertAppBase, ConvertApp) + run()
 - **`app/__init__.py`** — package marker
 - **`run.py`** — entry point (`python run.py` or `python -m app`)
 - **`ODA/`** — ODA File Converter v27.1 (Qt6, VC16) bundled for DWG read/write (~70 MB, excluded via .gitignore)
-- **`tests/`** — unit tests (pytest, 19 tests)
+- **`tests/`** — unit tests (pytest, 23 tests)
 - **`convertidor.exe`** — PyInstaller `--onefile --windowed` build
 - **`INSTRUCCIONES.txt`** — usage instructions for end users
-- **`AGENTS.md`** — this file
+- **`Contexto/AGENTS.md`** — this file
 
 ### Tools de calidad
 - **ruff** — linter configurado en `pyproject.toml`
@@ -29,10 +29,12 @@ Windows desktop app that converts AutoCAD DXF/DWG files to a user-selected targe
 
 ## Key Technical Decisions
 - **ODA File Converter** handles ALL file reads/writes (both DXF and DWG)
-- Output is always **`.dwg`** in the target version chosen by user
-- **ttkbootstrap** (theme: "superhero") for modern dark UI
+- Output format is user-selectable: **DWG** or **DXF** (default: DWG)
+- **ttkbootstrap** (theme: "superhero"/"flatly") for modern UI with dark/light toggle
 - **Not using ezdxf** anymore — ODA is the single engine
 - Files from network paths (UNC) work via `shutil.copyfile()` (not `copy2`)
+- History persisted in `historial.json` (gitignored)
+- Presets persisted in `presets.json` (gitignored)
 
 ## Version Mappings (UI → ODA)
 ```
@@ -231,24 +233,24 @@ Ejecutar Fase 1: Refactorizar monolito en módulos, agregar tests y CI/CD.
 - [x] Control de versiones semántico (CHANGELOG.md, pyproject.toml v2.1.0)
 - [ ] Detección/actualización automática del engine ODA — pendiente
 
-## 2. UX/UI
-- Vista previa de planos (miniaturas DWG/DXF)
-- Barra de progreso granular por archivo individual
-- Drag & drop de archivos/carpetas
-- Modo carpeta completa (convertir recursivamente)
-- Indicación visual de selección múltiple: texto informativo, badge de archivos seleccionados, tooltip, placeholder y título de filedialog personalizado
-- Historial de conversiones (fecha, archivo, versión, resultado)
-- Modo oscuro/claro seleccionable
-- Notificaciones toast al completar
-- Panel expandible de log detallado
+## 2. UX/UI ✅ COMPLETADO
+- [x] Vista previa de planos (miniaturas DWG/DXF)
+- [x] Barra de progreso granular por archivo individual
+- [x] Drag & drop de archivos/carpetas
+- [x] Modo carpeta completa (convertir recursivamente)
+- [x] Indicación visual de selección múltiple: texto informativo, badge de archivos seleccionados, tooltip, placeholder y título de filedialog personalizado
+- [x] Historial de conversiones (fecha, archivo, versión, resultado)
+- [x] Modo oscuro/claro seleccionable
+- [x] Notificaciones toast al completar
+- [x] Panel expandible de log detallado
+- [x] Tiempo estimado restante (ETA) en barra de progreso
 
-## 3. Funcionalidades Nuevas
-- Conversión inversa DWG → DXF
-- Procesamiento paralelo con `concurrent.futures`
-- Presets de conversión guardables
-- Exportar resumen CSV/TXT
-- Opción de purgar capas y bloques no usados (vía ODA)
-- Sobrescritura inteligente con recordatorio
+## 3. Funcionalidades Nuevas (Fase 3 — En progreso)
+- [x] Conversión bidireccional DWG ↔ DXF (selector de formato de salida en UI)
+- [ ] Presets de conversión guardables
+- [ ] Exportar resumen CSV + abrir carpeta destino
+- [ ] Opción de auditar/limpiar planos (vía ODA audit flag)
+- [ ] Sobrescritura inteligente con recordatorio
 
 ## 4. Distribución
 - [x] Instalador Inno Setup con asociación de archivos .dwg/.dxf
@@ -266,6 +268,42 @@ Ejecutar Fase 1: Refactorizar monolito en módulos, agregar tests y CI/CD.
 - Modo CLI para integración: `convertidor.exe --input ./planos --version ACAD2018 --output ./convertidos`
 - Reporte anónimo de errores (opt-in)
 - Botón de Ayuda → web FAQ
+
+---
+
+## Session Log — 04-Jun-2026 (Sesión 4)
+
+### Objetivo
+Fase 2 completa (UX v2) + Fase 3 Task 1 (conversión bidireccional).
+
+### Progreso
+- [x] Task 1: Historial de conversiones (JSON persistente, ventana Toplevel, limpiar)
+- [x] Task 2: Panel de log expandible (GUILogHandler, toggle Log ►/▼, copiar)
+- [x] Task 3: Notificaciones toast (ToastNotification de ttkbootstrap)
+- [x] Task 4: Modo carpeta completa (scan_folder recursivo + drag carpetas + preserve subfolders)
+- [x] Task 5: Tiempo estimado restante (ETA dinámico en barra de progreso)
+- [x] Task 6: Alternar modo oscuro/claro (☀/☾, superhero ↔ flatly)
+- [x] Fase 3 Task 1: Conversión bidireccional DWG ↔ DXF
+  - `models.py`: OUTPUT_FORMATS, FORMAT_EXT_MAP, DEFAULT_FORMAT
+  - `engine.py`: output_format param en _run_oda/convert_single/convert_batch
+  - `gui.py`: Combobox "Formato de salida: DWG / DXF" + pipeline completo
+  - 4 tests nuevos (23 total)
+- [x] Ruff 0 errores, 23 tests pasando
+
+### Archivos modificados
+- `app/models.py` — OUTPUT_FORMATS, FORMAT_EXT_MAP, DEFAULT_FORMAT
+- `app/engine.py` — output_format en toda la pipeline
+- `app/gui.py` — format selector UI, ETA, log panel, history, theme toggle, folder mode
+- `app/utils.py` — scan_folder, HistoryManager, GUILogHandler
+- `tests/test_models.py` — 3 nuevos tests formatos
+- `tests/test_engine.py` — 1 nuevo test format passing
+- `.gitignore` — historial.json, presets.json
+- `Contexto/AGENTS.md` — session log + plan actualizado
+
+### Pendiente
+- Compilar .exe con PyInstaller
+- Fase 3 Task 2: Presets de conversión
+- Probar conversión con archivos reales
 
 ## 7. Roadmap (12 semanas)
 ```
