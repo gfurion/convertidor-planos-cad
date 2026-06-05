@@ -99,3 +99,70 @@ class GUILogHandler(logging.Handler):
             self.widget.see("end")
         except Exception:
             pass
+
+
+PRESETS_FILE = "presets.json"
+BUILTIN_PRESETS = [
+    {"name": "DXF rápido (2018)", "version": "AutoCAD 2018–2024",
+     "output_format": "DXF", "output_dir": ""},
+    {"name": "DWG actual (2024)", "version": "AutoCAD 2018–2024",
+     "output_format": "DWG", "output_dir": ""},
+    {"name": "DWG legacy (2000)", "version": "AutoCAD 2000–2003",
+     "output_format": "DWG", "output_dir": ""},
+]
+
+BUILTIN_NAMES = {p["name"] for p in BUILTIN_PRESETS}
+
+
+class PresetManager:
+
+    @staticmethod
+    def load_presets() -> list:
+        if not os.path.exists(PRESETS_FILE):
+            return list(BUILTIN_PRESETS)
+        try:
+            with open(PRESETS_FILE, "r", encoding="utf-8") as f:
+                custom = json.load(f)
+            if not isinstance(custom, list):
+                raise ValueError("presets.json root is not a list")
+            seen = set()
+            all_presets = []
+            for p in BUILTIN_PRESETS + custom:
+                name = p.get("name", "")
+                if name not in seen:
+                    seen.add(name)
+                    all_presets.append(p)
+            return all_presets
+        except (json.JSONDecodeError, ValueError) as e:
+            logging.warning("Error loading presets: %s", e)
+            return list(BUILTIN_PRESETS)
+
+    @staticmethod
+    def save_presets(presets: list) -> None:
+        custom = [p for p in presets if p["name"] not in BUILTIN_NAMES]
+        try:
+            with open(PRESETS_FILE, "w", encoding="utf-8") as f:
+                json.dump(custom, f, indent=2, ensure_ascii=False)
+        except OSError as e:
+            logging.error("Error saving presets: %s", e)
+
+    @staticmethod
+    def add_preset(preset: dict) -> list:
+        presets = PresetManager.load_presets()
+        for i, p in enumerate(presets):
+            if p["name"] == preset["name"]:
+                presets[i] = preset
+                break
+        else:
+            presets.append(preset)
+        PresetManager.save_presets(presets)
+        return presets
+
+    @staticmethod
+    def delete_preset(name: str) -> list:
+        if name in BUILTIN_NAMES:
+            return PresetManager.load_presets()
+        presets = PresetManager.load_presets()
+        presets = [p for p in presets if p["name"] != name]
+        PresetManager.save_presets(presets)
+        return presets

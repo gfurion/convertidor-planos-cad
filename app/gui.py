@@ -26,7 +26,14 @@ from app.models import (
     VERSION_MAP,
     HistoryEntry,
 )
-from app.utils import add_history, clear_history, load_history, parse_drop_data, scan_folder
+from app.utils import (
+    PresetManager,
+    add_history,
+    clear_history,
+    load_history,
+    parse_drop_data,
+    scan_folder,
+)
 
 
 class ConvertAppBase:
@@ -38,6 +45,7 @@ class ConvertAppBase:
         self._history_entries: list = []
         self._cancel_event = threading.Event()
         self._setup_oda()
+        self._presets = PresetManager.load_presets()
         self._setup_ui()
 
     def _setup_oda(self):
@@ -45,19 +53,51 @@ class ConvertAppBase:
         if exe_dir.exists():
             self.engine = ODAEngine(str(exe_dir))
         else:
-            exe_dir = Path(__file__).parent.parent
-            self.engine = ODAEngine(str(exe_dir))
+            oda_installed = Path(os.environ.get("ProgramFiles", "C:\\Program Files"))
+            oda_installed = oda_installed / "ODA"
+            if oda_installed.exists():
+                dirs = [d for d in oda_installed.iterdir() if d.is_dir()]
+                if dirs:
+                    self.engine = ODAEngine(str(sorted(dirs)[-1]))
+                else:
+                    self.engine = ODAEngine(str(oda_installed))
+            else:
+                exe_dir = Path(__file__).parent.parent
+                self.engine = ODAEngine(str(exe_dir))
         if not self.engine.oda_exe.exists():
             messagebox.showwarning(
                 "ODA no encontrado",
                 "No se encontró ODAFileConverter.exe.\n"
                 "La conversión no funcionará correctamente.\n"
-                "Instale ODA File Converter en la carpeta 'ODA' junto al script."
+                "Ejecute setup.ps1 para instalar ODA File Converter."
             )
 
     def _setup_ui(self):
         main = ttk.Frame(self, padding=10)
         main.pack(fill=BOTH, expand=True)
+
+        preset_frame = ttk.Labelframe(main, text="Presets", padding=5)
+        preset_frame.pack(fill=X, pady=(0, 10))
+        preset_row = ttk.Frame(preset_frame)
+        preset_row.pack(fill=X)
+        self.preset_var = ttk.StringVar()
+        self.preset_combo = ttk.Combobox(
+            preset_row, textvariable=self.preset_var,
+            values=[p["name"] for p in self._presets],
+            state="readonly", width=35,
+        )
+        self.preset_combo.pack(side=LEFT, padx=(0, 5))
+        self.preset_combo.bind("<<ComboboxSelected>>", self._on_preset_selected)
+        ToolTip(self.preset_combo, text="Seleccionar un preset de conversión guardado")
+
+        ttk.Button(preset_row, text="💾", width=3,
+                   command=self._save_preset).pack(side=LEFT, padx=1)
+        ttk.Button(preset_row, text="🗑", width=3,
+                   command=self._delete_preset).pack(side=LEFT)
+        ToolTip(preset_row.winfo_children()[-2],
+                text="Guardar configuración actual como preset")
+        ToolTip(preset_row.winfo_children()[-1],
+                text="Eliminar preset seleccionado")
 
         ttk.Label(main, text="Versión de AutoCAD destino:",
                   font=("-size 10 -weight bold")).pack(anchor=W)
@@ -138,6 +178,16 @@ class ConvertAppBase:
         ttk.Button(dest_frame, text="Cambiar carpeta",
                    bootstyle="outline",
                    command=self._change_output).pack(side=RIGHT)
+
+        self.optimize_var = ttk.BooleanVar(value=True)
+        optimize_cb = ttk.Checkbutton(
+            main, text="Optimizar archivo (eliminar datos no usados)",
+            variable=self.optimize_var, bootstyle="round-toggle"
+        )
+        optimize_cb.pack(anchor=W, pady=(0, 2))
+        ToolTip(optimize_cb,
+                text="Elimina capas vacías, bloques no usados y estilos redundantes.\n"
+                      "Equivalente al comando PURGE de AutoCAD.")
 
         self.convert_btn = ttk.Button(
             main, text="Buscar y Convertir Planos",
@@ -328,7 +378,9 @@ class ConvertAppBase:
         self._files_snapshot = list(self.files)
         version_code = VERSION_MAP.get(self.version_var.get())
         output_format = self.format_var.get()
+        self._last_output_format = output_format
         output = self.output_dir or os.path.dirname(self._files_snapshot[0])
+        self._last_output_dir = output
 
         try:
             os.makedirs(output, exist_ok=True)
@@ -360,14 +412,15 @@ class ConvertAppBase:
             self.drop_area.configure(text="Convirtiendo...")
 
         mode = self.mode_var.get()
+        purge = self.optimize_var.get()
         self._results = {"success": 0, "failed": 0, "error": None}
 
         def worker():
             try:
                 if mode == "unit":
-                    self._convert_unitario(version_code, output, output_format)
+                    self._convert_unitario(version_code, output, output_format, purge)
                 else:
-                    self._convert_batch(version_code, output, output_format)
+                    self._convert_batch(version_code, output, output_format, purge)
             except PermissionError:
                 self._results["error"] = (
                     "Error de permisos",
@@ -399,7 +452,7 @@ class ConvertAppBase:
         os.makedirs(out_dir, exist_ok=True)
         return os.path.join(out_dir, os.path.splitext(os.path.basename(source_file))[0] + ext)
 
-    def _convert_unitario(self, version, output, output_format="DWG"):
+    def _convert_unitario(self, version, output, output_format="DWG", purge=False):
         total = len(self._files_snapshot)
         import time as time_mod
         start_time = time_mod.time()
@@ -411,7 +464,7 @@ class ConvertAppBase:
                 )
                 return
             t0 = time_mod.time()
-            ok = self.engine.convert_single(f, version, output, output_format)
+            ok = self.engine.convert_single(f, version, output, output_format, purge)
             elapsed = time_mod.time() - t0
             out_path = self._resolve_output_path(f, output, output_format)
             if ok:
@@ -431,9 +484,11 @@ class ConvertAppBase:
             self.after(0, self._update_file_status, f, status)
             logging.info("%s → %s (%.1fs)", os.path.basename(f), status, elapsed)
 
-    def _convert_batch(self, version, output, output_format="DWG"):
+    def _convert_batch(self, version, output, output_format="DWG", purge=False):
         self.after(0, self._update_progress, 0, len(self._files_snapshot), "Procesando lote...")
-        results = self.engine.convert_batch(self._files_snapshot, version, output, output_format)
+        results = self.engine.convert_batch(
+            self._files_snapshot, version, output, output_format, purge,
+        )
         self._results["success"] = len(results["success"])
         self._results["failed"] = len(results["failed"])
         for f in results["success"]:
@@ -470,9 +525,9 @@ class ConvertAppBase:
 
     def _conversion_done(self):
         error = self._results.get("error")
-        total = len(self._files_snapshot)
         success = self._results.get("success", 0)
         failed = self._results.get("failed", 0)
+        entries = list(self._history_entries)
         self._save_history()
         self.progress_var.set(100)
         self.status_var.set(f"Conversión completa — {success} OK, {failed} errores")
@@ -483,23 +538,55 @@ class ConvertAppBase:
                 text="Arrastra aquí tus planos .dwg/.dxf\no haz clic en 'Buscar y Convertir Planos'"
             )
         self._show_toast(success, failed, error)
-        if error:
-            messagebox.showerror(error[0], error[1])
-        elif failed > 0 and success > 0:
-            messagebox.showwarning(
-                "Completado con errores",
-                f"Se convirtieron {success} de {total} archivos.\n{failed} archivo(s) fallaron."
-            )
-        elif failed > 0:
-            messagebox.showerror(
-                "Error",
-                f"Todos los {failed} archivo(s) fallaron al convertir."
-            )
-        else:
-            messagebox.showinfo(
-                "Completado",
-                f"Se convirtieron {total} archivo{'s' if total != 1 else ''} exitosamente."
-            )
+        self._show_result_window(success, failed, error, entries)
+
+    def _on_preset_selected(self, event=None):
+        name = self.preset_var.get()
+        for p in self._presets:
+            if p["name"] == name:
+                self.version_var.set(p["version"])
+                self.format_var.set(p["output_format"])
+                if p["output_dir"]:
+                    self.output_dir = p["output_dir"]
+                    self.dest_var.set(p["output_dir"])
+                break
+
+    def _save_preset(self):
+        name = self.preset_var.get()
+        if not name:
+            name = f"Custom {self.format_var.get()} ({self.version_var.get()[:12]})"
+        from tkinter.simpledialog import askstring
+        new_name = askstring("Guardar preset", "Nombre del preset:",
+                             initialvalue=name, parent=self)
+        if not new_name:
+            return
+        preset = {
+            "name": new_name,
+            "version": self.version_var.get(),
+            "output_format": self.format_var.get(),
+            "output_dir": self.output_dir,
+        }
+        self._presets = PresetManager.add_preset(preset)
+        self._refresh_presets()
+        self.preset_var.set(new_name)
+
+    def _delete_preset(self):
+        name = self.preset_var.get()
+        from app.utils import BUILTIN_NAMES
+        if not name or name in BUILTIN_NAMES:
+            return
+        if messagebox.askyesno("Eliminar preset",
+                               f"¿Eliminar el preset '{name}'?"):
+            self._presets = PresetManager.delete_preset(name)
+            self._refresh_presets()
+            if self._presets:
+                self.preset_var.set(self._presets[0]["name"])
+
+    def _refresh_presets(self):
+        self.preset_combo["values"] = [p["name"] for p in self._presets]
+        if not self.preset_var.get() or \
+           self.preset_var.get() not in [p["name"] for p in self._presets]:
+            self.preset_var.set("")
 
     def _toggle_theme(self):
         style = ttk.Style()
@@ -532,6 +619,84 @@ class ConvertAppBase:
             duration=5000,
         )
         toast.show_toast()
+
+    def _show_result_window(self, success, failed, error, entries):
+        total = len(entries)
+        win = Toplevel(self)
+        win.title("Resumen de conversión")
+        win.geometry("700x400")
+        win.transient(self)
+        win.grab_set()
+
+        if error:
+            summary = f"Error: {error[1]}"
+            bootstyle = "danger"
+        elif failed > 0 and success > 0:
+            summary = f"{total} archivos: {success} OK, {failed} errores"
+            bootstyle = "warning"
+        elif failed > 0:
+            summary = f"Todos los {failed} archivo(s) fallaron"
+            bootstyle = "danger"
+        else:
+            s = "s" if total != 1 else ""
+            summary = f"{total} archivo{s} convertido{s} exitosamente"
+            bootstyle = "success"
+
+        ttk.Label(win, text=summary, font=("-size 12 -weight bold"),
+                  bootstyle=bootstyle).pack(pady=(10, 5))
+
+        version_name = self.version_var.get()
+        tree = ttk.Treeview(win, columns=("file", "status", "version", "output"),
+                            show="headings", height=12)
+        tree.heading("file", text="Archivo")
+        tree.heading("status", text="Estado")
+        tree.heading("version", text="Versión")
+        tree.heading("output", text="Destino")
+        tree.column("file", width=200)
+        tree.column("status", width=70)
+        tree.column("version", width=150)
+        tree.column("output", width=250)
+        tree.pack(fill=BOTH, expand=True, padx=5, pady=5)
+
+        for f, status, out_path in entries:
+            tree.insert("", END, values=(
+                os.path.basename(f), status, version_name, out_path or "—",
+            ))
+
+        btn_frame = ttk.Frame(win)
+        btn_frame.pack(fill=X, padx=5, pady=(0, 5))
+
+        def _export_csv():
+            from datetime import datetime
+            path = filedialog.asksaveasfilename(
+                title="Guardar resumen CSV",
+                defaultextension=".csv",
+                filetypes=[("CSV", "*.csv"), ("Todos", "*.*")],
+            )
+            if not path:
+                return
+            try:
+                with open(path, "w", encoding="utf-8-sig") as f:
+                    f.write("Archivo,Estado,Destino,Versión,Timestamp\n")
+                    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    for fp, st, out in entries:
+                        out_esc = out.replace('"', '""') if out else ""
+                        f.write(f'{os.path.basename(fp)},{st},"{out_esc}",{version_name},{ts}\n')
+                logging.info("Resumen exportado a %s", path)
+            except OSError as e:
+                messagebox.showerror("Error al exportar", str(e))
+
+        def _open_folder():
+            out = self._last_output_dir if hasattr(self, "_last_output_dir") else ""
+            if out and os.path.isdir(out):
+                os.startfile(out)
+
+        ttk.Button(btn_frame, text="Exportar CSV", bootstyle="success-outline",
+                   command=_export_csv).pack(side=LEFT)
+        ttk.Button(btn_frame, text="Abrir carpeta destino", bootstyle="info-outline",
+                   command=_open_folder).pack(side=LEFT, padx=5)
+        ttk.Button(btn_frame, text="Cerrar", bootstyle="secondary",
+                   command=win.destroy).pack(side=RIGHT)
 
     def _open_history(self):
         entries = load_history()

@@ -1,6 +1,27 @@
 # Changelog
 
-## [Unreleased] — v2.1.0
+## [Unreleased]
+
+## [2.3.0] — 2026-06-04
+
+### Added
+- Fase 2: UX/UI v2
+  - Historial de conversiones (JSON persistente, ventana Toplevel)
+  - Panel de log expandible con toggle y copiar al portapapeles
+  - Notificaciones toast al completar
+  - Modo carpeta completa con escaneo recursivo y preservación de subcarpetas
+  - Tiempo estimado restante (ETA) en barra de progreso
+  - Alternar modo oscuro/claro (superhero ↔ flatly)
+- Fase 3: Nuevas capacidades
+  - Conversión bidireccional DWG ↔ DXF (selector de formato de salida)
+  - Presets de conversión guardables (3 built-in + personalizados)
+  - Exportar resumen CSV con BOM (compatible Excel)
+  - Botón "Abrir carpeta destino" al finalizar
+  - Checkbox "Optimizar archivo (eliminar datos no usados)" — purge flag de ODA
+- Tests: 19 → 35 tests unitarios
+- Detección automática de ODA instalado en `%ProgramFiles%\ODA\`
+
+## [2.1.0] — 2026-06-04
 
 ### Added
 - Refactor monolito a módulos: `app/models`, `app/engine`, `app/utils`, `app/gui`

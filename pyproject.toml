@@ -1,6 +1,6 @@
 [project]
 name = "convertidor-planos-cad"
-version = "2.1.0"
+version = "2.3.0"
 description = "Convierte archivos DXF/DWG a versiones específicas de AutoCAD"
 requires-python = ">=3.10"
 

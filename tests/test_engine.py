@@ -62,6 +62,22 @@ class TestODAEngine:
         assert result is True
         mock_convert.assert_called_once_with("file.dwg", "ACAD2018", "out")
 
+    @patch("app.engine.subprocess.run")
+    def test_purge_flag_appended_when_true(self, mock_run, tmp_path):
+        mock_run.return_value = MagicMock(returncode=0)
+        oda_dir = tmp_path / "ODA"
+        oda_dir.mkdir()
+        (oda_dir / "ODAFileConverter.exe").write_text("")
+        engine = ODAEngine(str(oda_dir))
+
+        engine._run_oda("in", "out", "ACAD2018", "DWG", purge=True)
+        args = mock_run.call_args[0][0]
+        assert args[6] == "1"
+
+        engine._run_oda("in", "out", "ACAD2018", "DWG", purge=False)
+        args2 = mock_run.call_args[0][0]
+        assert len(args2) == 7  # sin purge flag
+
     def test_convert_single_passes_format(self, tmp_path):
         oda_dir = tmp_path / "ODA"
         oda_dir.mkdir()
@@ -72,7 +88,8 @@ class TestODAEngine:
         out_dir.mkdir()
         engine = ODAEngine(str(oda_dir))
 
-        def fake_run(in_dir, out_dir_, ver, fmt="DWG"):
+        # mock _run_oda to write a DXF output file
+        def fake_run(in_dir, out_dir_, ver, fmt="DWG", **kwargs):
             src = next(Path(in_dir).iterdir())
             base = src.stem
             ext = ".dxf" if fmt == "DXF" else ".dwg"

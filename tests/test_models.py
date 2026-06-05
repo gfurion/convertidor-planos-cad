@@ -7,6 +7,7 @@ from app.models import (
     OUTPUT_FORMATS,
     VALID_EXTENSIONS,
     VERSION_MAP,
+    Preset,
 )
 
 
@@ -51,3 +52,23 @@ class TestAppConstants:
 
     def test_default_format(self):
         assert DEFAULT_FORMAT == "DWG"
+
+
+class TestPreset:
+    def test_preset_dataclass(self):
+        p = Preset(name="test", version="ACAD2018", output_format="DXF",
+                    output_dir="C:\\out")
+        assert p.name == "test"
+        assert p.version == "ACAD2018"
+        assert p.output_format == "DXF"
+        assert p.output_dir == "C:\\out"
+
+    def test_preset_default_output_dir(self):
+        p = Preset(name="test", version="ACAD2018", output_format="DWG")
+        assert p.output_dir == ""
+
+    def test_preset_to_dict(self):
+        p = Preset(name="t", version="v", output_format="DXF")
+        d = p.to_dict()
+        assert d == {"name": "t", "version": "v", "output_format": "DXF",
+                      "output_dir": ""}

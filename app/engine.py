@@ -21,7 +21,7 @@ class ODAEngine:
         return env
 
     def _run_oda(self, input_dir: str, output_dir: str, version: str,
-                  output_format: str = "DWG") -> bool:
+                  output_format: str = "DWG", purge: bool = False) -> bool:
         cmd = [
             str(self.oda_exe),
             input_dir,
@@ -31,6 +31,8 @@ class ODAEngine:
             "0",
             "1",
         ]
+        if purge:
+            cmd.append("1")
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = subprocess.SW_HIDE
@@ -55,7 +57,7 @@ class ODAEngine:
             return False
 
     def convert_batch(self, files: list, version: str, output_dir: str,
-                       output_format: str = "DWG") -> dict:
+                       output_format: str = "DWG", purge: bool = False) -> dict:
         out_ext = ".dwg" if output_format == "DWG" else ".dxf"
         results: dict = {"success": [], "failed": []}
         with tempfile.TemporaryDirectory() as tmp_input:
@@ -64,7 +66,7 @@ class ODAEngine:
                 for f in files:
                     shutil.copyfile(f, os.path.join(tmp_input, os.path.basename(f)))
 
-                self._run_oda(tmp_input, tmp_output, version, output_format)
+                self._run_oda(tmp_input, tmp_output, version, output_format, purge=purge)
 
                 for f in files:
                     base_name = os.path.splitext(os.path.basename(f))[0]
@@ -80,13 +82,13 @@ class ODAEngine:
         return results
 
     def convert_single(self, file: str, version: str, output_dir: str,
-                        output_format: str = "DWG") -> bool:
+                        output_format: str = "DWG", purge: bool = False) -> bool:
         out_ext = ".dwg" if output_format == "DWG" else ".dxf"
         with tempfile.TemporaryDirectory() as tmp_input:
             tmp_output = tempfile.mkdtemp()
             try:
                 shutil.copyfile(file, os.path.join(tmp_input, os.path.basename(file)))
-                ok = self._run_oda(tmp_input, tmp_output, version, output_format)
+                ok = self._run_oda(tmp_input, tmp_output, version, output_format, purge=purge)
                 if ok:
                     base_name = os.path.splitext(os.path.basename(file))[0]
                     src = os.path.join(tmp_output, base_name + out_ext)

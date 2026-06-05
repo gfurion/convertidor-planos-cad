@@ -42,3 +42,14 @@ class HistoryEntry:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass
+class Preset:
+    name: str
+    version: str
+    output_format: str
+    output_dir: str = ""
+
+    def to_dict(self) -> dict:
+        return asdict(self)
