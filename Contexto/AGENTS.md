@@ -317,10 +317,10 @@ Fase 2 completa (UX v2) + Fase 3 Task 1 (conversión bidireccional).
 - `.gitignore` — historial.json, presets.json
 - `Contexto/AGENTS.md` — session log + plan actualizado
 
-### Pendiente
-- Compilar .exe con PyInstaller
-- Fase 3 Task 2: Presets de conversión
-- Probar conversión con archivos reales
+### Pendiente (histórico — completado en Sesión 5)
+- [x] Compilar .exe con PyInstaller
+- [x] Fase 3 Task 2: Presets de conversión
+- [x] Probar conversión con archivos reales
 
 ---
 
@@ -335,9 +335,10 @@ Completar Fase 3 + Fase 4 y generar instalador distribuible.
 - [x] Fase 3 Task 4: Checkbox "Optimizar archivo" (purge flag de ODA, 1 test)
 - [x] Fase 4: PyInstaller --onefile --windowed (~32 MB, sin ODA)
 - [x] Fase 4: Inno Setup installer con ODA embebido (~52 MB)
-- [x] Fix `_setup_oda`: soporte frozen mode con `sys.executable`
 - [x] 35 tests, ruff 0 errores
 - [x] Commit + tag v2.3.0 + push a GitHub
+- [x] GitHub Release v2.3.0 creado (gh CLI)
+- [x] `_setup_oda` fix: busca ODA en `ODA/` junto al .exe y en `%ProgramFiles%\ODA\`
 
 ### Archivos modificados
 - `app/models.py` — Preset dataclass
@@ -359,12 +360,32 @@ Completar Fase 3 + Fase 4 y generar instalador distribuible.
 - `installer/Setup_Convertidor_CAD_v23.exe` — 52 MB (todo-en-uno)
 
 ### Pendiente
-- Subir installer a GitHub Releases para distribución
+- [x] Subir installer a GitHub Releases para distribución
 
-## 7. Roadmap
+### Plan: Auto‑actualizador (post‑v2.3.0)
+
+Consultar GitHub API al iniciar → si hay versión nueva → ofrecer descargar e instalar.
+
+**Archivos a modificar:**
+- `app/__init__.py` — agregar `__version__ = "2.3.0"`
+- `app/utils.py` — `check_for_update(current_version)` + `_version_compare(v1, v2)`
+- `app/gui.py` — `_check_update()` en Toplevel: "Nueva versión disponible [Descargar] [No ahora] ☐ No preguntar más"
+- `skip_version.txt` — persistencia para "No preguntar más"
+
+**API:** `GET https://api.github.com/repos/gfurion/convertidor-planos-cad/releases/latest`
+
+**Tests:** 2 nuevos (`test_version_compare`, `test_check_update_offline`)
+
+Ver plan detallado en `Contexto/AGENTS.md` → sección "Plan: Auto‑actualizador"
+
+## 7. Roadmap ✅ COMPLETADO
 ```
-Fase 1 (Sem 1-3): Refactor + tests + logging
-Fase 2 (Sem 4-6): UX v2 (drag & drop, miniaturas, progreso, historial, i18n)
-Fase 3 (Sem 7-9): Nuevas features (DXF←→DWG, carpeta recursiva, CLI, presets)
-Fase 4 (Sem 10-12): Instalador, auto-updater, firma digital, documentación
+Fase 1 (Sem 1-3): Refactor + tests + logging           ✅
+Fase 2 (Sem 4-6): UX v2 (drag & drop, historial, etc)   ✅
+Fase 3 (Sem 7-9): Features (bidireccional, presets, CSV) ✅
+Fase 4 (Sem 10-12): Instalador + GitHub Release         ✅
 ```
+### Próximo: Auto‑actualizador (opcional)
+- Consultar GitHub Releases al iniciar
+- Descargar e instalar con un clic
+- Persistir "No preguntar más"
