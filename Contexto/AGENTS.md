@@ -4,15 +4,16 @@
 Windows desktop app that converts AutoCAD DXF/DWG files between versions and formats (DWG ↔ DXF). Single-file Python app packaged with PyInstaller. UI in Spanish for non-technical users.
 
 ## Architecture
-- **`app/models.py`** — data models (VERSION_MAP, OUTPUT_FORMATS, HistoryEntry)
-- **`app/engine.py`** — ODA conversion logic (ODAEngine class)
+- **`app/models.py`** — data models (VERSION_MAP, OUTPUT_FORMATS, HistoryEntry, Preset)
+- **`app/engine.py`** — ODA conversion logic (ODAEngine class, bidirectional, purge support)
 - **`app/utils.py`** — helpers (parse_drop_data, setup_logging, HistoryManager, GUILogHandler, PresetManager)
 - **`app/gui.py`** — GUI classes (ConvertAppBase, ConvertApp) + run()
 - **`app/__init__.py`** — package marker
 - **`run.py`** — entry point (`python run.py` or `python -m app`)
-- **`ODA/`** — ODA File Converter v27.1 (Qt6, VC16) bundled for DWG read/write (~70 MB, excluded via .gitignore)
-- **`tests/`** — unit tests (pytest, 23 tests)
-- **`convertidor.exe`** — PyInstaller `--onefile --windowed` build
+- **`ODA/`** — ODA File Converter v27.1 (Qt6, VC16), ~70 MB (excluido via .gitignore)
+- **`tests/`** — unit tests (pytest, 35 tests)
+- **`dist/convertidor.exe`** — PyInstaller `--onefile --windowed` build (~32 MB)
+- **`installer/Setup_Convertidor_CAD_v23.exe`** — Inno Setup installer todo-en-uno (~52 MB)
 - **`INSTRUCCIONES.txt`** — usage instructions for end users
 - **`Contexto/AGENTS.md`** — this file
 
@@ -31,10 +32,13 @@ Windows desktop app that converts AutoCAD DXF/DWG files between versions and for
 - **ODA File Converter** handles ALL file reads/writes (both DXF and DWG)
 - Output format is user-selectable: **DWG** or **DXF** (default: DWG)
 - **ttkbootstrap** (theme: "superhero"/"flatly") for modern UI with dark/light toggle
-- **Not using ezdxf** anymore — ODA is the single engine
+- **Not using ezdxf** — ODA is the single engine
 - Files from network paths (UNC) work via `shutil.copyfile()` (not `copy2`)
 - History persisted in `historial.json` (gitignored)
 - Presets persisted in `presets.json` (gitignored)
+- ODA buscado en: `ODA/` junto al .exe → `%ProgramFiles%\ODA\` (fallback)
+- PyInstaller `--onefile --windowed` con `--add-data "app;app"`
+- Distribución: Inno Setup installer con ODA embebido (52 MB)
 
 ## Version Mappings (UI → ODA)
 ```
@@ -62,10 +66,16 @@ pip install ttkbootstrap pyinstaller
 pyinstaller --onefile --windowed ^
   --hidden-import=ttkbootstrap ^
   --hidden-import=tkinterdnd2 ^
-  --add-data "ODA;ODA" ^
   --add-data "app;app" ^
+  --icon icono.ico ^
   run.py
 ```
+
+## Building the Installer
+```powershell
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" instalador.iss
+```
+Output: `installer\Setup_Convertidor_CAD_v23.exe` (~52 MB with ODA)
 
 ## Qt Platform Plugin Fix
 ODAFileConverter needs env vars to find Qt plugins at runtime:
@@ -245,12 +255,19 @@ Ejecutar Fase 1: Refactorizar monolito en módulos, agregar tests y CI/CD.
 - [x] Panel expandible de log detallado
 - [x] Tiempo estimado restante (ETA) en barra de progreso
 
-## 3. Funcionalidades Nuevas (Fase 3 — En progreso)
+## 3. Funcionalidades Nuevas (Fase 3) ✅ COMPLETADO
 - [x] Conversión bidireccional DWG ↔ DXF (selector de formato de salida en UI)
-- [ ] Presets de conversión guardables
-- [ ] Exportar resumen CSV + abrir carpeta destino
-- [ ] Opción de auditar/limpiar planos (vía ODA audit flag)
-- [ ] Sobrescritura inteligente con recordatorio
+- [x] Presets de conversión guardables (3 built-in + personalizados)
+- [x] Exportar resumen CSV + abrir carpeta destino
+- [x] Opción de auditar/limpiar planos (vía ODA purge flag)
+
+## 4. Distribución (Fase 4) ✅ COMPLETADO
+- [x] Compilar .exe con PyInstaller (~32 MB)
+- [x] Instalador Inno Setup con ODA embebido (~52 MB)
+- [x] Asociación de archivos .dwg/.dxf
+- [x] Acceso directo en escritorio / menú inicio
+- [x] Desinstalador limpio
+- [x] Detección automática de ODA en modo frozen (sys.executable)
 
 ## 4. Distribución
 - [x] Instalador Inno Setup con asociación de archivos .dwg/.dxf
@@ -305,7 +322,46 @@ Fase 2 completa (UX v2) + Fase 3 Task 1 (conversión bidireccional).
 - Fase 3 Task 2: Presets de conversión
 - Probar conversión con archivos reales
 
-## 7. Roadmap (12 semanas)
+---
+
+## Session Log — 04-Jun-2026 (Sesión 5)
+
+### Objetivo
+Completar Fase 3 + Fase 4 y generar instalador distribuible.
+
+### Progreso
+- [x] Fase 3 Task 2: Presets de conversión (PresetManager, UI Combobox + 💾/🗑, 6 tests)
+- [x] Fase 3 Task 3: Exportar resumen CSV + Abrir carpeta destino (ventana Toplevel, UTF-8 BOM)
+- [x] Fase 3 Task 4: Checkbox "Optimizar archivo" (purge flag de ODA, 1 test)
+- [x] Fase 4: PyInstaller --onefile --windowed (~32 MB, sin ODA)
+- [x] Fase 4: Inno Setup installer con ODA embebido (~52 MB)
+- [x] Fix `_setup_oda`: soporte frozen mode con `sys.executable`
+- [x] 35 tests, ruff 0 errores
+- [x] Commit + tag v2.3.0 + push a GitHub
+
+### Archivos modificados
+- `app/models.py` — Preset dataclass
+- `app/utils.py` — PresetManager, BUILTIN_PRESETS
+- `app/gui.py` — Presets UI, _show_result_window, purga checkbox, _setup_oda frozen fix, import sys
+- `app/engine.py` — purge param en _run_oda/convert_single/convert_batch
+- `tests/test_models.py` — 3 tests Preset
+- `tests/test_utils.py` — 6 tests PresetManager, 2 tests CSV export
+- `tests/test_engine.py` — 1 test purge flag
+- `pyproject.toml` — version 2.3.0
+- `CHANGELOG.md` — v2.3.0
+- `instalador.iss` — version 2.3.0 + ODA/ incluido
+- `INSTRUCCIONES.txt` — actualizado
+- `.gitignore` — historial.json, presets.json
+- `Contexto/AGENTS.md` — session log
+
+### Artifacts generados
+- `dist/convertidor.exe` — 32 MB (portable, sin ODA)
+- `installer/Setup_Convertidor_CAD_v23.exe` — 52 MB (todo-en-uno)
+
+### Pendiente
+- Subir installer a GitHub Releases para distribución
+
+## 7. Roadmap
 ```
 Fase 1 (Sem 1-3): Refactor + tests + logging
 Fase 2 (Sem 4-6): UX v2 (drag & drop, miniaturas, progreso, historial, i18n)
