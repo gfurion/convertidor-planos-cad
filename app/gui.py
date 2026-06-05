@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import threading
 from pathlib import Path
 from tkinter import Text, Toplevel, filedialog, messagebox
@@ -49,7 +50,11 @@ class ConvertAppBase:
         self._setup_ui()
 
     def _setup_oda(self):
-        exe_dir = Path(__file__).parent.parent / "ODA"
+        if getattr(sys, 'frozen', False):
+            base_dir = Path(sys.executable).parent
+        else:
+            base_dir = Path(__file__).parent.parent
+        exe_dir = base_dir / "ODA"
         if exe_dir.exists():
             self.engine = ODAEngine(str(exe_dir))
         else:
@@ -62,8 +67,7 @@ class ConvertAppBase:
                 else:
                     self.engine = ODAEngine(str(oda_installed))
             else:
-                exe_dir = Path(__file__).parent.parent
-                self.engine = ODAEngine(str(exe_dir))
+                self.engine = ODAEngine(str(base_dir))
         if not self.engine.oda_exe.exists():
             messagebox.showwarning(
                 "ODA no encontrado",
