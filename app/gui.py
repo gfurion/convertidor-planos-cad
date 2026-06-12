@@ -28,7 +28,6 @@ from app.models import (
     HistoryEntry,
 )
 from app.utils import (
-    PresetManager,
     add_history,
     clear_history,
     load_history,
@@ -46,7 +45,6 @@ class ConvertAppBase:
         self._history_entries: list = []
         self._cancel_event = threading.Event()
         self._setup_oda()
-        self._presets = PresetManager.load_presets()
         self._setup_ui()
 
     def _setup_oda(self):
@@ -79,29 +77,6 @@ class ConvertAppBase:
     def _setup_ui(self):
         main = ttk.Frame(self, padding=10)
         main.pack(fill=BOTH, expand=True)
-
-        preset_frame = ttk.Labelframe(main, text="Presets", padding=5)
-        preset_frame.pack(fill=X, pady=(0, 10))
-        preset_row = ttk.Frame(preset_frame)
-        preset_row.pack(fill=X)
-        self.preset_var = ttk.StringVar()
-        self.preset_combo = ttk.Combobox(
-            preset_row, textvariable=self.preset_var,
-            values=[p["name"] for p in self._presets],
-            state="readonly", width=35,
-        )
-        self.preset_combo.pack(side=LEFT, padx=(0, 5))
-        self.preset_combo.bind("<<ComboboxSelected>>", self._on_preset_selected)
-        ToolTip(self.preset_combo, text="Seleccionar un preset de conversión guardado")
-
-        ttk.Button(preset_row, text="💾", width=3,
-                   command=self._save_preset).pack(side=LEFT, padx=1)
-        ttk.Button(preset_row, text="🗑", width=3,
-                   command=self._delete_preset).pack(side=LEFT)
-        ToolTip(preset_row.winfo_children()[-2],
-                text="Guardar configuración actual como preset")
-        ToolTip(preset_row.winfo_children()[-1],
-                text="Eliminar preset seleccionado")
 
         ttk.Label(main, text="Versión de AutoCAD destino:",
                   font=("-size 10 -weight bold")).pack(anchor=W)
@@ -182,16 +157,6 @@ class ConvertAppBase:
         ttk.Button(dest_frame, text="Cambiar carpeta",
                    bootstyle="outline",
                    command=self._change_output).pack(side=RIGHT)
-
-        self.optimize_var = ttk.BooleanVar(value=True)
-        optimize_cb = ttk.Checkbutton(
-            main, text="Optimizar archivo (eliminar datos no usados)",
-            variable=self.optimize_var, bootstyle="round-toggle"
-        )
-        optimize_cb.pack(anchor=W, pady=(0, 2))
-        ToolTip(optimize_cb,
-                text="Elimina capas vacías, bloques no usados y estilos redundantes.\n"
-                      "Equivalente al comando PURGE de AutoCAD.")
 
         self.convert_btn = ttk.Button(
             main, text="Buscar y Convertir Planos",
@@ -382,7 +347,6 @@ class ConvertAppBase:
         self._files_snapshot = list(self.files)
         version_code = VERSION_MAP.get(self.version_var.get())
         output_format = self.format_var.get()
-        self._last_output_format = output_format
         output = self.output_dir or os.path.dirname(self._files_snapshot[0])
         self._last_output_dir = output
 
@@ -416,15 +380,14 @@ class ConvertAppBase:
             self.drop_area.configure(text="Convirtiendo...")
 
         mode = self.mode_var.get()
-        purge = self.optimize_var.get()
         self._results = {"success": 0, "failed": 0, "error": None}
 
         def worker():
             try:
                 if mode == "unit":
-                    self._convert_unitario(version_code, output, output_format, purge)
+                    self._convert_unitario(version_code, output, output_format)
                 else:
-                    self._convert_batch(version_code, output, output_format, purge)
+                    self._convert_batch(version_code, output, output_format)
             except PermissionError:
                 self._results["error"] = (
                     "Error de permisos",
@@ -456,7 +419,7 @@ class ConvertAppBase:
         os.makedirs(out_dir, exist_ok=True)
         return os.path.join(out_dir, os.path.splitext(os.path.basename(source_file))[0] + ext)
 
-    def _convert_unitario(self, version, output, output_format="DWG", purge=False):
+    def _convert_unitario(self, version, output, output_format="DWG"):
         total = len(self._files_snapshot)
         import time as time_mod
         start_time = time_mod.time()
@@ -468,7 +431,7 @@ class ConvertAppBase:
                 )
                 return
             t0 = time_mod.time()
-            ok = self.engine.convert_single(f, version, output, output_format, purge)
+            ok = self.engine.convert_single(f, version, output, output_format)
             elapsed = time_mod.time() - t0
             out_path = self._resolve_output_path(f, output, output_format)
             if ok:
@@ -488,10 +451,10 @@ class ConvertAppBase:
             self.after(0, self._update_file_status, f, status)
             logging.info("%s → %s (%.1fs)", os.path.basename(f), status, elapsed)
 
-    def _convert_batch(self, version, output, output_format="DWG", purge=False):
+    def _convert_batch(self, version, output, output_format="DWG"):
         self.after(0, self._update_progress, 0, len(self._files_snapshot), "Procesando lote...")
         results = self.engine.convert_batch(
-            self._files_snapshot, version, output, output_format, purge,
+            self._files_snapshot, version, output, output_format,
         )
         self._results["success"] = len(results["success"])
         self._results["failed"] = len(results["failed"])
@@ -543,54 +506,6 @@ class ConvertAppBase:
             )
         self._show_toast(success, failed, error)
         self._show_result_window(success, failed, error, entries)
-
-    def _on_preset_selected(self, event=None):
-        name = self.preset_var.get()
-        for p in self._presets:
-            if p["name"] == name:
-                self.version_var.set(p["version"])
-                self.format_var.set(p["output_format"])
-                if p["output_dir"]:
-                    self.output_dir = p["output_dir"]
-                    self.dest_var.set(p["output_dir"])
-                break
-
-    def _save_preset(self):
-        name = self.preset_var.get()
-        if not name:
-            name = f"Custom {self.format_var.get()} ({self.version_var.get()[:12]})"
-        from tkinter.simpledialog import askstring
-        new_name = askstring("Guardar preset", "Nombre del preset:",
-                             initialvalue=name, parent=self)
-        if not new_name:
-            return
-        preset = {
-            "name": new_name,
-            "version": self.version_var.get(),
-            "output_format": self.format_var.get(),
-            "output_dir": self.output_dir,
-        }
-        self._presets = PresetManager.add_preset(preset)
-        self._refresh_presets()
-        self.preset_var.set(new_name)
-
-    def _delete_preset(self):
-        name = self.preset_var.get()
-        from app.utils import BUILTIN_NAMES
-        if not name or name in BUILTIN_NAMES:
-            return
-        if messagebox.askyesno("Eliminar preset",
-                               f"¿Eliminar el preset '{name}'?"):
-            self._presets = PresetManager.delete_preset(name)
-            self._refresh_presets()
-            if self._presets:
-                self.preset_var.set(self._presets[0]["name"])
-
-    def _refresh_presets(self):
-        self.preset_combo["values"] = [p["name"] for p in self._presets]
-        if not self.preset_var.get() or \
-           self.preset_var.get() not in [p["name"] for p in self._presets]:
-            self.preset_var.set("")
 
     def _toggle_theme(self):
         style = ttk.Style()
