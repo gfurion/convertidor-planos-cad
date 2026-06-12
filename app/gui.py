@@ -675,6 +675,7 @@ if HAS_DND:
             self.title(APP_TITLE)
             self.geometry("700x500")
             self.resizable(True, True)
+            ttk.Style().theme_use(DEFAULT_THEME)
             self._init_common()
 else:
     class ConvertApp(ttk.Window, ConvertAppBase):  # type: ignore[no-redef]

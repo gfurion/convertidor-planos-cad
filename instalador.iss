@@ -2,7 +2,7 @@
 ; Generado para crear instalador profesional
 
 #define MyAppName "Convertidor de Planos CAD"
-#define MyAppVersion "2.3.0"
+#define MyAppVersion "2.3.1"
 #define MyAppPublisher "GCVM Soluciones"
 #define MyAppURL "https://github.com/gvalbuena"
 #define MyAppExeName "convertidor.exe"
@@ -19,7 +19,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 LicenseFile=INSTRUCCIONES.txt
 OutputDir=installer
-OutputBaseFilename=Setup_Convertidor_CAD_v23
+OutputBaseFilename=Setup_Convertidor_CAD_v231
 SetupIconFile=icono.ico
 Compression=lzma2/ultra64
 SolidCompression=yes

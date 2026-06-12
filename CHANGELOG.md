@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [2.3.1] — 2026-06-04
+
+### Fixed
+- Tema oscuro (`superhero`) no se aplicaba en modo Drag & Drop
+- Checkbox "Optimizar archivo" eliminado (causaba error en ODA v27.1)
+
+### Removed
+- Presets de conversión en GUI (simplifica interfaz para usuarios no técnicos)
+
 ## [2.3.0] — 2026-06-04
 
 ### Added
