@@ -362,7 +362,32 @@ Completar Fase 3 + Fase 4 y generar instalador distribuible.
 ### Pendiente
 - [x] Subir installer a GitHub Releases para distribución
 
-### Plan: Auto‑actualizador (post‑v2.3.0)
+---
+
+## Session Log — 04-Jun-2026 (Sesión 6)
+
+### Objetivo
+Simplificar GUI y publicar v2.3.1.
+
+### Progreso
+- [x] Eliminar panel de Presets de la GUI (simplifica interfaz para usuarios no técnicos)
+- [x] Eliminar checkbox "Optimizar archivo" (causaba error con purge flag de ODA v27.1)
+- [x] Fix: tema oscuro (`superhero`) no se aplicaba en modo Drag & Drop
+- [x] Compilar .exe v2.3.1 + installer Inno Setup
+- [x] GitHub Release v2.3.1: `Setup_Convertidor_CAD_v231.exe`
+- [x] 35 tests, ruff 0 errores
+
+### Archivos modificados
+- `app/gui.py` — removidos: Presets UI, optimize checkbox, métodos de preset, purge param
+- `pyproject.toml` — version 2.3.0 → 2.3.1
+- `CHANGELOG.md` — v2.3.1
+- `instalador.iss` — version 2.3.1, OutputBaseFilename `Setup_Convertidor_CAD_v231`
+
+### Artifacts
+- `dist/convertidor.exe` — 32 MB
+- `installer/Setup_Convertidor_CAD_v231.exe` — 52 MB
+
+### Plan: Auto‑actualizador (post‑v2.3.1)
 
 Consultar GitHub API al iniciar → si hay versión nueva → ofrecer descargar e instalar.
 
