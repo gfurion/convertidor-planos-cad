@@ -90,22 +90,6 @@ class ConvertAppBase:
         ToolTip(version_combo,
                 text="Selecciona la versión de AutoCAD a la que quieres convertir los archivos")
 
-        ttk.Label(main, text="Modo de conversión:",
-                  font=("-size 10 -weight bold")).pack(anchor=W)
-        self.mode_var = ttk.StringVar(value="unit")
-        mode_frame = ttk.Frame(main)
-        mode_frame.pack(anchor=W, pady=(0, 10))
-        unit_radio = ttk.Radiobutton(mode_frame, text="Unitario — progreso por archivo",
-                        variable=self.mode_var, value="unit")
-        unit_radio.pack(side=LEFT)
-        ToolTip(unit_radio, text="Convierte archivo por archivo con barra de progreso individual")
-
-        batch_radio = ttk.Radiobutton(mode_frame, text="Lote — más rápido",
-                        variable=self.mode_var, value="batch")
-        batch_radio.pack(side=LEFT, padx=10)
-        ToolTip(batch_radio,
-                text="Convierte todos de una vez — más rápido, sin progreso individual")
-
         self.format_var = ttk.StringVar(value=DEFAULT_FORMAT)
         format_frame = ttk.Frame(main)
         format_frame.pack(anchor=W, pady=(0, 10))
@@ -310,9 +294,11 @@ class ConvertAppBase:
         if count > 0:
             self.file_list.pack(fill=BOTH, expand=True, pady=(5, 0))
             self.drop_area.pack_forget()
+            self.convert_btn.configure(text="Convertir Planos")
         else:
             self.file_list.pack_forget()
             self.drop_area.pack(fill=BOTH, expand=True)
+            self.convert_btn.configure(text="Buscar y Convertir Planos")
 
     def _change_output(self):
         d = filedialog.askdirectory(title="Seleccionar carpeta de destino")
@@ -379,15 +365,11 @@ class ConvertAppBase:
         if HAS_DND:
             self.drop_area.configure(text="Convirtiendo...")
 
-        mode = self.mode_var.get()
         self._results = {"success": 0, "failed": 0, "error": None}
 
         def worker():
             try:
-                if mode == "unit":
-                    self._convert_unitario(version_code, output, output_format)
-                else:
-                    self._convert_batch(version_code, output, output_format)
+                self._convert_unitario(version_code, output, output_format)
             except PermissionError:
                 self._results["error"] = (
                     "Error de permisos",
@@ -506,6 +488,12 @@ class ConvertAppBase:
             )
         self._show_toast(success, failed, error)
         self._show_result_window(success, failed, error, entries)
+        self.files.clear()
+        self._refresh_file_list()
+        self.output_dir = ""
+        self.dest_var.set("Misma carpeta que los origen")
+        self.progress_var.set(0)
+        self.status_var.set("Listo")
 
     def _toggle_theme(self):
         style = ttk.Style()
